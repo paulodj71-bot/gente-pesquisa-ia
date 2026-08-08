@@ -35,7 +35,7 @@ def buscar_no_google(termo_pesquisa):
 def consultar_gemini(contexto_web, pergunta):
     gemini.configure(api_key=GEMINI_API_KEY)
     prompt = f"Contexto da Web:\n{contexto_web}\n\nIdentifique os fatos principais, dados numéricos, tendências futuras e insights práticos sobre: {pergunta}"
-    model = gemini.GenerativeModel("gemini-1.5-pro")
+    model = gemini.GenerativeModel("model = gemini.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
     return response.text
 
