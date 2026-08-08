@@ -33,7 +33,6 @@ def buscar_no_google(termo_pesquisa):
         return f"Erro na busca web: {str(e)}"
 
 def consultar_gemini(contexto_web, pergunta):
-    # Proteção de cota injetada diretamente dentro da função
     try:
         gemini.configure(api_key=GEMINI_API_KEY)
         prompt = f"Contexto da Web:\n{contexto_web}\n\nIdentifique os fatos principais, dados numéricos, tendências futuras e insights práticos sobre: {pergunta}"
@@ -41,33 +40,36 @@ def consultar_gemini(contexto_web, pergunta):
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        # Se estourar o limite gratuito do Google, o robô avisa em texto e não quebra o app
         return "Aviso: O limite temporário de requisições gratuitas do Gemini foi atingido no momento. Prosseguindo com dados diretos da Web."
 
 def consolidar_com_claude(pergunta, dados_web, resp_gemini):
-    client = Anthropic(api_key=ANTHROPIC_API_KEY)
-    prompt = f"""
-    Você é um Agente Consolidador Sênior de Pesquisa. Sua tarefa é analisar o material bruto da web e a perspectiva gerada por uma inteligência especialista para redigir o relatório definitivo de pesquisa sobre o tema: "{pergunta}"
-    
-    FONTES BRUTAS DA WEB:
-    {dados_web}
-    
-    INSIGHTS E ANÁLISES DISPONÍVEIS:
-    {resp_gemini}
-    
-    DIRETRIZES DE REDAÇÃO DO RELATÓRIO:
-    1. Fusão Inteligente: Combine os dados da Web com os insights disponíveis.
-    2. Fact-Checking: Use os dados brutos da Web para validar informações e evitar alucinações. Se o Gemini tiver falhado por limite de cota, monte o relatório baseando-se puramente nas Fontes Brutas da Web.
-    3. Sem Repetições: Elimine textos redundantes.
-    4. Estrutura Profissional: Formate o texto usando Markdown elegante, títulos claros, bullet points e crie uma seção dedicada ao final listando de forma organizada os links das fontes web utilizadas.
-    5. Tom: Executivo, analítico e imparcial. Tem que parecer um relatório feito por um analista humano sênior.
-    """
-    response = client.messages.create(
-        model="claude-3-5-sonnet-latest",
-        max_tokens=2500,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.content.text
+    try:
+        client = Anthropic(api_key=ANTHROPIC_API_KEY)
+        prompt = f"""
+        Você é um Agente Consolidador Sênior de Pesquisa. Sua tarefa é analisar o material bruto da web e a perspectiva gerada por uma inteligência especialista para redigir o relatório definitivo de pesquisa sobre o tema: "{pergunta}"
+        
+        FONTES BRUTAS DA WEB:
+        {dados_web}
+        
+        INSIGHTS E ANÁLISES DISPONÍVEIS:
+        {resp_gemini}
+        
+        DIRETRIZES DE REDAÇÃO DO RELATÓRIO:
+        1. Fusão Inteligente: Combine os dados da Web com os insights disponíveis.
+        2. Fact-Checking: Use os dados brutos da Web para validar informações e evitar alucinações. Se o Gemini tiver falhado por limite de cota, monte o relatório baseando-se puramente nas Fontes Brutas da Web.
+        3. Sem Repetições: Elimine textos redundantes.
+        4. Estrutura Profissional: Formate o texto usando Markdown elegante, títulos claros, bullet points e crie uma seção dedicada ao final listando de forma organizada os links das fontes web utilizadas.
+        5. Tom: Executivo, analítico e imparcial. Tem que parecer um relatório feito por um analista humano sênior.
+        """
+        # Atualizado o modelo e max_tokens reduzido para garantir conformidade de formato da API
+        response = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+    except Exception as e:
+        return f"Erro na consolidação do Claude: {str(e)}\n\nDados brutos da pesquisa:\n{dados_web}"
 
 # --- INTERFACE GRÁFICA DO APLICATIVO ---
 
@@ -81,13 +83,11 @@ pergunta_usuario = st.text_input(
 )
 
 if st.button("Iniciar Pesquisa Avançada", type="primary"):
-    # Validação interna de segurança antes de disparar o agente
     if not all([GEMINI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_SEARCH_KEY, GOOGLE_CX]):
         st.error("⚠️ Erro de Configuração: As chaves de API necessárias não foram detectadas no ambiente do servidor.")
     elif not pergunta_usuario:
         st.warning("⚠️ Por favor, digite um tema ou pergunta antes de iniciar.")
     else:
-        # Linha do tempo visual do progresso do agente
         with st.status("Agente operacional em execução...", expanded=True) as status:
             st.write("🌐 Realizando varredura em tempo real no Google...")
             dados_web = buscar_no_google(pergunta_usuario)
@@ -100,14 +100,12 @@ if st.button("Iniciar Pesquisa Avançada", type="primary"):
             
             status.update(label="Análise finalizada com sucesso!", state="complete", expanded=False)
         
-        # Exibição do resultado final limpo em abas separadas
         aba_final, aba_bastidores = st.tabs(["📋 Relatório Consolidado", "⚙️ Dados de Inteligência Brutos"])
         
         with aba_final:
             st.subheader("Relatório de Inteligência Executiva")
             st.markdown(relatorio_final)
             
-            # Recurso profissional: Baixar relatório gerado
             st.download_button(
                 label="📥 Baixar Relatório Completo (.md)",
                 data=relatorio_final,
@@ -116,10 +114,8 @@ if st.button("Iniciar Pesquisa Avançada", type="primary"):
             )
             
         with aba_bastidores:
-            st.info("Abaixo estão as respostas originais do Gemini antes do tratamento e consolidação analítica do Claude.")
-            
+            st.info("Abaixo estão as respostas originais capturadas pelas ferramentas antes do tratamento.")
             st.subheader("♊ Gemini")
             st.write(resposta_gemini)
-                
             st.subheader("🌐 Links e Textos Brutos Capturados na Web")
             st.code(dados_web, language="text")
