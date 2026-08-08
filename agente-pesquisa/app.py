@@ -33,12 +33,16 @@ def buscar_no_google(termo_pesquisa):
         return f"Erro na busca web: {str(e)}"
 
 def consultar_gemini(contexto_web, pergunta):
-    gemini.configure(api_key=GEMINI_API_KEY)
-    prompt = f"Contexto da Web:\n{contexto_web}\n\nIdentifique os fatos principais, dados numéricos, tendências futuras e insights práticos sobre: {pergunta}"
-    # Atualizado para o modelo estável de nova geração
-    model = gemini.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
-    return response.text
+    # Proteção de cota injetada diretamente dentro da função
+    try:
+        gemini.configure(api_key=GEMINI_API_KEY)
+        prompt = f"Contexto da Web:\n{contexto_web}\n\nIdentifique os fatos principais, dados numéricos, tendências futuras e insights práticos sobre: {pergunta}"
+        model = gemini.GenerativeModel("gemini-2.0-flash")
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        # Se estourar o limite gratuito do Google, o robô avisa em texto e não quebra o app
+        return "Aviso: O limite temporário de requisições gratuitas do Gemini foi atingido no momento. Prosseguindo com dados diretos da Web."
 
 def consolidar_com_claude(pergunta, dados_web, resp_gemini):
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -48,12 +52,12 @@ def consolidar_com_claude(pergunta, dados_web, resp_gemini):
     FONTES BRUTAS DA WEB:
     {dados_web}
     
-    INSIGHTS E ANÁLISES (Gemini):
+    INSIGHTS E ANÁLISES DISPONÍVEIS:
     {resp_gemini}
     
     DIRETRIZES DE REDAÇÃO DO RELATÓRIO:
-    1. Fusão Inteligente: Combine os dados da Web com os insights do Gemini.
-    2. Fact-Checking: Use os dados brutos da Web para validar informações e evitar alucinações.
+    1. Fusão Inteligente: Combine os dados da Web com os insights disponíveis.
+    2. Fact-Checking: Use os dados brutos da Web para validar informações e evitar alucinações. Se o Gemini tiver falhado por limite de cota, monte o relatório baseando-se puramente nas Fontes Brutas da Web.
     3. Sem Repetições: Elimine textos redundantes.
     4. Estrutura Profissional: Formate o texto usando Markdown elegante, títulos claros, bullet points e crie uma seção dedicada ao final listando de forma organizada os links das fontes web utilizadas.
     5. Tom: Executivo, analítico e imparcial. Tem que parecer um relatório feito por um analista humano sênior.
