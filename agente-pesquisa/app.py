@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from openai import OpenAI
+import os
 import google.generativeai as gemini
 from anthropic import Anthropic
 
@@ -11,131 +11,110 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CONFIGURAÇÃO DAS CHAVES DE API ---
-# Você pode colar aqui ou usar a barra lateral do Streamlit para preencher com segurança
-OPENAI_API_KEY = st.sidebar.text_input("OpenAI API Key", type="password")
-GEMINI_API_KEY = st.sidebar.text_input("Gemini API Key", type="password")
-ANTHROPIC_API_KEY = st.sidebar.text_input("Claude API Key", type="password")
-GOOGLE_SEARCH_KEY = st.sidebar.text_input("Google Search Key", type="password")
-GOOGLE_CX = st.sidebar.text_input("Search Engine ID (CX)", type="password")
+# --- CARREGAMENTO SEGURO DAS CHAVES (VARIÁVEIS DE AMBIENTE / SECRETS) ---
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GOOGLE_SEARCH_KEY = os.environ.get("GOOGLE_SEARCH_KEY")
+GOOGLE_CX = os.environ.get("GOOGLE_CX")
 
-# --- FUNÇÕES DO AGENTE (LÓGICA) ---
+# --- FUNÇÕES DO AGENTE DE INTELIGÊNCIA ---
 
-def buscar_no_google(termo_pesquisa, api_key, cx):
+def buscar_no_google(termo_pesquisa):
     url = "https://googleapis.com"
-    params = {"q": termo_pesquisa, "key": api_key, "cx": cx, "num": 4}
+    params = {"q": termo_pesquisa, "key": GOOGLE_SEARCH_KEY, "cx": GOOGLE_CX, "num": 4}
     try:
         response = requests.get(url, params=params).json()
         contexto = ""
         if "items" in response:
             for item in response["items"]:
                 contexto += f"Título: {item['title']}\nLink: {item['link']}\nResumo: {item['snippet']}\n\n"
-        return contexto if contexto else "Nenhum resultado recente encontrado."
+        return contexto if contexto else "Nenhum resultado recente encontrado na web."
     except Exception as e:
-        return f"Erro na busca: {str(e)}"
+        return f"Erro na busca web: {str(e)}"
 
-def consultar_chatgpt(contexto_web, pergunta, api_key):
-    client = OpenAI(api_key=api_key)
-    prompt = f"Contexto da Web:\n{contexto_web}\n\nExtraia os fatos principais e dados técnicos sobre: {pergunta}"
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices.message.content
-
-def consultar_gemini(contexto_web, pergunta, api_key):
-    gemini.configure(api_key=api_key)
-    prompt = f"Contexto da Web:\n{contexto_web}\n\nIdentifique tendências futuras e insights criativos sobre: {pergunta}"
+def consultar_gemini(contexto_web, pergunta):
+    gemini.configure(api_key=GEMINI_API_KEY)
+    prompt = f"Contexto da Web:\n{contexto_web}\n\nIdentifique os fatos principais, dados numéricos, tendências futuras e insights práticos sobre: {pergunta}"
     model = gemini.GenerativeModel("gemini-1.5-pro")
     response = model.generate_content(prompt)
     return response.text
 
-def consolidar_com_claude(pergunta, dados_web, resp_gpt, resp_gemini, api_key):
-    client = Anthropic(api_key=api_key)
+def consolidar_com_claude(pergunta, dados_web, resp_gemini):
+    client = Anthropic(api_key=ANTHROPIC_API_KEY)
     prompt = f"""
-    Você é um Agente Consolidador Sênior de Pesquisa. Crie o relatório definitivo sobre: "{pergunta}"
+    Você é um Agente Consolidador Sênior de Pesquisa. Sua tarefa é analisar o material bruto da web e a perspectiva gerada por uma inteligência especialista para redigir o relatório definitivo de pesquisa sobre o tema: "{pergunta}"
     
     FONTES BRUTAS DA WEB:
     {dados_web}
     
-    ANÁLISE DO CHATGPT:
-    {resp_gpt}
-    
-    INSIGHTS DO GEMINI:
+    INSIGHTS E ANÁLISES (Gemini):
     {resp_gemini}
     
-    DIRETRIZES:
-    1. Mescle a precisão do ChatGPT com a visão de futuro do Gemini.
-    2. Valide as informações cruzando com as fontes da Web para evitar alucinações.
-    3. Use formatação Markdown elegante com títulos, subtítulos e marcadores.
-    4. Crie uma seção final listando os links das fontes utilizadas.
+    DIRETRIZES DE REDAÇÃO DO RELATÓRIO:
+    1. Fusão Inteligente: Combine os dados da Web com os insights do Gemini.
+    2. Fact-Checking: Use os dados brutos da Web para validar informações e evitar alucinações.
+    3. Sem Repetições: Elimine textos redundantes.
+    4. Estrutura Profissional: Formate o texto usando Markdown elegante, títulos claros, bullet points e crie uma seção dedicada ao final listando de forma organizada os links das fontes web utilizadas.
+    5. Tom: Executivo, analítico e imparcial. Tem que parecer um relatório feito por um analista humano sênior.
     """
     response = client.messages.create(
         model="claude-3-5-sonnet-latest",
         max_tokens=2500,
         messages=[{"role": "user", "content": prompt}]
     )
-    return response.content[0].text
+    return response.content.text
 
-# --- INTERFACE GRÁFICA (STREAMLIT) ---
+# --- INTERFACE GRÁFICA DO APLICATIVO ---
 
-st.title("🔍 Super Agente de Pesquisa Multi-Modelos")
-st.caption("Google Search + ChatGPT + Gemini unificados e consolidados pela inteligência crítica do Claude.")
+st.title("🔍 Agente de Pesquisa de Mercado & Inteligência")
+st.caption("Google Search + Gemini unificados e editados criticamente pelo Claude 3.5 Sonnet.")
 
-# Campo de entrada da pesquisa
+# Campo de entrada da pesquisa do usuário
 pergunta_usuario = st.text_input(
-    "O que você deseja pesquisar em profundidade?", 
-    placeholder="Ex: Regulamentação de Inteligência Artificial na Europa e impactos no Brasil"
+    "O que você deseja investigar em profundidade?", 
+    placeholder="Ex: Regulamentação de Inteligência Artificial e seus impactos no ecossistema brasileiro"
 )
 
 if st.button("Iniciar Pesquisa Avançada", type="primary"):
-    # Validação rápida de chaves preenchidas
-    if not all([OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_SEARCH_KEY, GOOGLE_CX]):
-        st.error("⚠️ Por favor, preencha todas as chaves de API na barra lateral esquerda antes de começar.")
+    # Validação interna de segurança antes de disparar o agente
+    if not all([GEMINI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_SEARCH_KEY, GOOGLE_CX]):
+        st.error("⚠️ Erro de Configuração: As chaves de API necessárias não foram detectadas no ambiente do servidor.")
     elif not pergunta_usuario:
-        st.warning("⚠️ Digite um tema para pesquisar.")
+        st.warning("⚠️ Por favor, digite um tema ou pergunta antes de iniciar.")
     else:
-        # Criando a área de status para o usuário acompanhar o progresso
-        with st.status("Executando agente de pesquisa...", expanded=True) as status:
+        # Linha do tempo visual do progresso do agente
+        with st.status("Agente operacional em execução...", expanded=True) as status:
+            st.write("🌐 Realizando varredura em tempo real no Google...")
+            dados_web = buscar_no_google(pergunta_usuario)
             
-            st.write("🌐 Consultando o Google em tempo real...")
-            dados_web = buscar_no_google(pergunta_usuario, GOOGLE_SEARCH_KEY, GOOGLE_CX)
+            st.write("♊ Gemini extraindo dados e mapeando tendências...")
+            resposta_gemini = consultar_gemini(dados_web, pergunta_usuario)
             
-            st.write("🤖 ChatGPT extraindo dados técnicos...")
-            resposta_gpt = consultar_chatgpt(dados_web, pergunta_usuario, OPENAI_API_KEY)
+            st.write("🦉 Claude assumindo a posição de Editor-Chefe para gerar o relatório final...")
+            relatorio_final = consolidar_com_claude(pergunta_usuario, dados_web, resposta_gemini)
             
-            st.write("♊ Gemini gerando insights e tendências...")
-            resposta_gemini = consultar_gemini(dados_web, pergunta_usuario, GEMINI_API_KEY)
-            
-            st.write("🦉 Claude editando e consolidando o relatório final...")
-            relatorio_final = consolidar_com_claude(pergunta_usuario, dados_web, resposta_gpt, resposta_gemini, ANTHROPIC_API_KEY)
-            
-            status.update(label="Pesquisa concluída com sucesso!", state="complete", expanded=False)
+            status.update(label="Análise finalizada com sucesso!", state="complete", expanded=False)
         
-        # Exibição dos resultados organizados em abas
-        aba_final, aba_bastidores = st.tabs(["📋 Relatório Consolidado", "⚙️ Análises Individuais (Bastidores)"])
+        # Exibição do resultado final limpo em abas separadas
+        aba_final, aba_bastidores = st.tabs(["📋 Relatório Consolidado", "⚙️ Dados de Inteligência Brutos"])
         
         with aba_final:
-            st.subheader("Relatório Final de Inteligência")
+            st.subheader("Relatório de Inteligência Executiva")
             st.markdown(relatorio_final)
             
-            # Botão para baixar o relatório em Markdown
+            # Recurso profissional: Baixar relatório gerado
             st.download_button(
-                label="📥 Baixar Relatório (.md)",
+                label="📥 Baixar Relatório Completo (.md)",
                 data=relatorio_final,
-                file_name=f"relatorio_pesquisa.md",
+                file_name="relatorio_inteligencia.md",
                 mime="text/markdown"
             )
             
         with aba_bastidores:
-            st.warning("Aqui estão as respostas brutas geradas por cada IA antes da revisão final do Claude:")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("🤖 ChatGPT")
-                st.write(resposta_gpt)
-            with col2:
-                st.subheader("♊ Gemini")
-                st.write(resposta_gemini)
+            st.info("Abaixo estão as respostas originais do Gemini antes do tratamento e consolidação analítica do Claude.")
+            
+            st.subheader("♊ Gemini")
+            st.write(resposta_gemini)
                 
-            st.subheader("🌐 Fontes do Google Encontradas")
+            st.subheader("🌐 Links e Textos Brutos Capturados na Web")
             st.code(dados_web, language="text")
